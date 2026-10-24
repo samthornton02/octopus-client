@@ -23,6 +23,34 @@ CV 40 MJ/m³ ≈ 11.3627 kWh/m³) so every consumer reports the same kWh.
 octopus-client @ git+https://github.com/samthornton02/octopus-client.git@v0.1.0
 ```
 
+## Pricing a tariff history (v0.2)
+
+```python
+for agreement in await client.resolve_tariffs("A-XXXXXXXX"):
+    priced = await client.fetch_agreement_rates(
+        agreement, "2026-01-01T00:00:00Z",
+        offpeak="00:30-07:30",            # Economy 7; E10: "01:00-06:00,13:00-16:00,20:00-22:00"
+        payment_method="DIRECT_DEBIT",
+    )
+    priced["unit"], priced["standing"], priced["warnings"]
+```
+
+`fetch_agreement_rates` returns flat `{valid_from, valid_to, value_inc_vat}` windows:
+
+- **clipped to the agreement's own dates**, so a customer who switched tariff is never
+  priced with another product's rates;
+- **single-rate** (fixed, variable, Tracker, Agile, Go, Intelligent Go, Cosy, Flux, gas) and
+  **two-rate** (Economy 7/10) handled — the register comes from the tariff code and is
+  verified against the API, falling back to the other layout on a 400;
+- one price per window for the chosen payment method;
+- 429/5xx retried; missing rate series come back as `warnings` rather than silently empty.
+
+Look rates up with `RateTable(rows).at(instant)`. It compares **instants**, so readings
+stamped `+01:00` (BST) match rates stamped `Z` correctly — never compare the raw strings.
+
+Off-peak hours are not in the API; they're UTC windows you supply (meters stay on GMT year
+round). Not covered: Intelligent Octopus smart-charge dispatches (GraphQL) and export tariffs.
+
 ## Develop
 
 ```
